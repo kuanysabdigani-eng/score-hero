@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Score! Hero 3 - Messi vs Yashin HD</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #090e17;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+        }
+        #ui {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #eee;
+            text-align: center;
+            pointer-events: none;
+            text-shadow: 0 3px 6px rgba(0,0,0,0.8);
+            background: rgba(10, 15, 25, 0.7);
+            padding: 12px 30px;
+            border-radius: 25px;
+            border: 1px solid rgba(255,255,255,0.15);
+            backdrop-filter: blur(5px);
+        }
+        h1 { margin: 0 0 4px 0; font-size: 24px; letter-spacing: 1.5px; color: #fff; }
+        p { margin: 0; font-size: 15px; color: #ccc; }
+        .score-board { color: #00ffcc; font-weight: bold; font-size: 18px; margin-top: 4px; display: block; text-shadow: 0 0 10px rgba(0,255,204,0.5); }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <h1>SCORE! HERO 3</h1>
+        <p>Месси (№10) vs Лев Яшин</p>
+        <span id="scoreText" class="score-board">ГОЛ: 0</span>
+    </div>
+
+    <!-- Подключаем Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        let score = 0;
+
+        // --- Инициализация ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x090e17);
+        scene.fog = new THREE.FogExp2(0x090e17, 0.025);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // Камера чуть выше и ближе, чтобы идеально видеть Месси и ворота
+        camera.position.set(0, 3.2, 8.5);
+        camera.lookAt(0, 1.2, -2);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.body.appendChild(renderer.domElement);
+
+        // --- Освещение (Кинематографичное) ---
+        const ambientLight = new THREE.AmbientLight(0xddeeff, 0.6);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        mainLight.position.set(5, 18, 8);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        mainLight.shadow.bias = -0.0001;
+        scene.add(mainLight);
+
+        // Прожектор на стадионе
+        const spotLight = new THREE.SpotLight(0x77bbff, 2);
+        spotLight.position.set(0, 20, 5);
+        spotLight.angle = Math.PI / 4;
+        spotLight.penumbra = 0.5;
+        scene.add(spotLight);
+
+        // --- Поле с улучшенной текстурой ---
+        const pitchGeo = new THREE.PlaneGeometry(30, 45);
+        const pitchMat = new THREE.MeshStandardMaterial({ 
+            color: 0x1c5c32, 
+            roughness: 0.8,
+            metalness: 0.05
+        });
+        const pitch = new THREE.Mesh(pitchGeo, pitchMat);
+        pitch.rotation.x = -Math.PI / 2;
+        pitch.receiveShadow = true;
+        scene.add(pitch);
+
+        // Разметка поля
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+        const lineGeo = new THREE.PlaneGeometry(0.12, 45);
+        const centerLine = new THREE.Mesh(lineGeo, lineMat);
+        centerLine.rotation.x = -Math.PI / 2;
+        centerLine.position.set(0, 0.01, 0);
+        scene.add(centerLine);
+
+        // --- Ворота ---
+        const goalGroup = new THREE.Group();
+        goalGroup.position.set(0, 0, -13);
+        
+        const postMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.8 });
+        const postGeo = new THREE.CylinderGeometry(0.1, 0.1, 4.0, 16);
+        
+        const leftPost = new THREE.Mesh(postGeo, postMat);
+        leftPost.position.set(-3.0, 2.0, 0);
+        leftPost.castShadow = true;
+        
+        const rightPost = new THREE.Mesh(postGeo, postMat);
+        rightPost.position.set(3.0, 2.0, 0);
+        rightPost.castShadow = true;
+
+        const crossGeo = new THREE.CylinderGeometry(0.1, 0.1, 6.2, 16);
+        crossGeo.rotateZ(Math.PI / 2);
+        const crossbar = new THREE.Mesh(crossGeo, postMat);
+        crossbar.position.set(0, 4.0, 0);
+        crossbar.castShadow = true;
+
+        // Детализированная сетка
+        const netGeo = new THREE.PlaneGeometry(6.0, 4.0, 15, 10);
+        const netMat = new THREE.MeshBasicMaterial({ color: 0xdddddd, wireframe: true, transparent: true, opacity: 0.35 });
+        const net = new THREE.Mesh(netGeo, netMat);
+        net.position.set(0, 2.0, -0.6);
+
+        goalGroup.add(leftPost, rightPost, crossbar, net);
+        scene.add(goalGroup);
+
+        // --- Мяч (Графичный с паттерном) ---
+        const ballGeo = new THREE.SphereGeometry(0.38, 32, 32);
+        // Процедурный узор для мяча (имитация классики)
+        const ballMat = new THREE.MeshStandardMaterial({ 
+            color: 0xffffff, 
+            roughness: 0.25, 
+            metalness: 0.1 
+        });
+        const ball = new THREE.Mesh(ballGeo, ballMat);
+        ball.position.set(0, 0.38, 5.0); // Мяч ближе к игроку
+        ball.castShadow = true;
+        scene.add(ball);
+
+        // Добавим черные пятиугольники на мяч (детали)
+        for(let i = 0; i < 5; i++) {
+            const patchGeo = new THREE.CircleGeometry(0.12, 5);
+            const patchMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+            const patch = new THREE.Mesh(patchGeo, patchMat);
+            patch.position.set(Math.sin(i)*0.25, 0.25 + (i%2)*0.1, Math.cos(i)*0.25);
+            patch.lookAt(ball.position.clone().add(new THREE.Vector3(0,1,0)));
+            ball.add(patch);
+        }
+
+        const shadowTexture = new THREE.TextureLoader().load('https://i.imgur.com/yN4ZzZl.png');
+        const shadowSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: shadowTexture, transparent: true, opacity: 0.8 }));
+        shadowSprite.scale.set(1.0, 1.0, 1);
+        shadowSprite.position.set(0, 0.02, 5.0);
+        scene.add(shadowSprite);
+
+        // --- ЛИОНЕЛЬ МЕССИ (Качественная 3D модель) ---
+        const messiGroup = new THREE.Group();
+        messiGroup.position.set(0, 0, 5.8); // Стоит прямо перед мячом
+        scene.add(messiGroup);
+
+        // Форма Интер Майами (Розовая с черными деталями)
+        const kitMat = new THREE.MeshStandardMaterial({ color: 0xff4f8b, roughness: 0.6 });
+        const shortsMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xf5c29d, roughness: 0.7 });
+
+        // Торс
+        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.18, 0.9, 16), kitMat);
+        torso.position.y = 0.9;
+        torso.castShadow = true;
+        messiGroup.add(torso);
+
+        // Голова
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), skinMat);
+        head.position.y = 1.55;
+        messiGroup.add(head);
+
+        // Волосы и борода
+        const hairMat = new THREE.MeshStandardMaterial({ color: 0x221100 });
+        const hair = new THREE.Mesh(new THREE.SphereGeometry(0.19, 16, 16, 0, Math.PI*2, 0, Math.PI/2), hairMat);
+        hair.position.y = 1.6;
+        messiGroup.add(hair);
+
+        const beard = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 0.15), hairMat);
+        beard.position.set(0, 1.48, 0.08);
+        messiGroup.add(beard);
+
+        // Ноги (опорная и бьющая)
+        const legSupport = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.8, 12), shortsMat);
+        legSupport.position.set(-0.15, 0.4, 0.2);
+        messiGroup.add(legSupport);
+
+        const legKick = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.8, 12), shortsMat);
+        legKick.name = "kickLeg";
+        legKick.position.set(0.15, 0.4, -0.2);
+        legKick.rotation.x = -0.6; // Замах
+        messiGroup.add(legKick);
+
+
+        // --- ВРАТАРЬ: ЛЕВ ЯШИН (Ретро-стиль, графичный) ---
+        const keeperGroup = new THREE.Group();
+        keeperGroup.position.set(0, 0, -12.5);
+        scene.add(keeperGroup);
+
+        const kBlackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5, metalness: 0.2 });
+        
+        // Тело Яшина
+        const kBody = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.25, 1.7, 16), kBlackMat);
+        kBody.position.y = 0.85;
+        kBody.castShadow = true;
+        keeperGroup.add(kBody);
+
+        // Голова
+        const kHead = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), skinMat);
+        kHead.position.y = 1.95;
+        keeperGroup.add(kHead);
+
+        // Легендарная кепка Яшина
+        const kCap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.08, 16), kBlackMat);
+        kCap.position.set(0, 2.15, 0.04);
+        keeperGroup.add(kCap);
+        
+        const kVisor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.15), kBlackMat);
+        kVisor.position.set(0, 2.12, 0.15);
+        keeperGroup.add(kVisor);
+
+        // Буква "Д" на груди
+        const dGeo = new THREE.PlaneGeometry(0.3, 0.3);
+        const dTexture = new THREE.TextureLoader().load('https://i.imgur.com/93jG23a.png');
+        const dMat = new THREE.MeshBasicMaterial({ map: dTexture, transparent: true });
+        const dLogo = new THREE.Mesh(dGeo, dMat);
+        dLogo.position.set(0, 1.0, 0.28);
+        keeperGroup.add(dLogo);
+
+
+        // --- Логика Управления и Свайпа ---
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let isDrawing = false;
+        let points = [];
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 4 });
+        let trajectoryObject = null;
+
+        let isFlying = false;
+        let flightTime = 0;
+        let flightDuration = 0.85; 
+        let startPos = new THREE.Vector3();
+        let peakPos = new THREE.Vector3();
+        let targetPos = new THREE.Vector3();
+        let messiAnim = 0;
+
+        function getMousePos(e) {
+            if (e.touches) {
+                mouse.x = (e.touches[0].clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.touches[0].clientY / window.innerHeight) * 2 + 1;
+            } else {
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            }
+        }
+
+        window.addEventListener('pointerdown', (e) => {
+            if (isFlying) return;
+            getMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects([ball]);
+
+            if (intersects.length > 0) {
+                isDrawing = true;
+                points = [ball.position.clone()];
+                if(trajectoryObject) scene.remove(trajectoryObject);
+            }
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!isDrawing) return;
+            getMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+            const targetV3 = new THREE.Vector3();
+            raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.38), targetV3);
+            
+            if (points.length < 25) {
+                points.push(targetV3);
+            } else {
+                points.shift();
+                points.push(targetV3);
+            }
+            
+            if (points.length > 2) {
+                const curve = new THREE.CatmullRomCurve3(points);
+                const cPoints = curve.getPoints(50);
+                const geom = new THREE.BufferGeometry().setFromPoints(cPoints);
+                if(trajectoryObject) scene.remove(trajectoryObject);
+                trajectoryObject = new THREE.Line(geom, lineMaterial);
+                scene.add(trajectoryObject);
+            }
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            if(trajectoryObject) scene.remove(trajectoryObject);
+
+            if (points.length > 4) {
+                const last = points[points.length - 1];
+                const first = points[points.length - 3];
+                const dx = last.x - first.x;
+                const dz = last.z - first.z;
+
+                if (dz < -1.5) {
+                    startKick(dx, dz);
+                }
+            }
+        });
+
+        function startKick(dx, dz) {
+            isFlying = true;
+            flightTime = 0;
+            startPos.copy(ball.position);
+            
+            targetPos.x = THREE.MathUtils.clamp(dx * 7, -2.8, 2.8);
+            targetPos.y = 0.38;
+            targetPos.z = -12.8;
+
+            peakPos.x = startPos.x + (targetPos.x - startPos.x) * 0.5;
+            peakPos.y = 2.4; // Высота дуги
+            peakPos.z = startPos.z + (targetPos.z - startPos.z) * 0.5;
+
+            messiAnim = 1;
+        }
+
+        // --- Анимационный цикл ---
+
+        const clock = new THREE.Clock();
+        let keeperState = 'idle';
+        let keeperTimer = 0;
+        let keeperMoveTarget = new THREE.Vector3();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+
+            // Анимация удара Месси
+            if (messiAnim > 0) {
+                messiAnim -= dt * 5;
+                const kickLeg = messiGroup.getObjectByName("kickLeg");
+                if(kickLeg) {
+                    kickLeg.rotation.x = -0.6 - (Math.sin(messiAnim * Math.PI) * 1.8);
+                }
+            }
+
+            // Полет мяча (Кривая Безье)
+            if (isFlying) {
+                flightTime += dt;
+                let t = flightTime / flightDuration;
+                if (t > 1) t = 1;
+
+                const p0 = startPos, p1 = peakPos, p2 = targetPos;
+                ball.position.x = (1-t)*(1-t)*p0.x + 2*(1-t)*t*p1.x + t*t*p2.x;
+                ball.position.y = (1-t)*(1-t)*p0.y + 2*(1-t)*t*p1.y + t*t*p2.y;
+                ball.position.z = (1-t)*(1-t)*p0.z + 2*(1-t)*t*p1.z + t*t*p2.z;
+                
+                ball.rotation.x -= dt * 15;
+                ball.rotation.y += dt * 5;
+
+                shadowSprite.position.x = ball.position.x;
+                shadowSprite.position.z = ball.position.z;
+                shadowSprite.material.opacity = Math.max(0, 0.8 - (ball.position.y * 0.25));
+
+                if (t === 1) {
+                    handleGoalResult();
+                }
+            }
+
+            // Интеллект Яшина (сейвы)
+            if(isFlying && keeperState === 'idle' && flightTime > 0.1) {
+                keeperState = 'diving';
+                keeperMoveTarget.x = THREE.MathUtils.clamp(targetPos.x * 0.9, -2.4, 2.4);
+                keeperMoveTarget.y = THREE.MathUtils.clamp(targetPos.y + 0.9, 0.4, 2.1); 
+                keeperMoveTarget.z = -12.3;
+            }
+
+            if(keeperState === 'diving') {
+                 keeperTimer += dt;
+                 keeperGroup.position.lerp(keeperMoveTarget, 0.14);
+                 keeperGroup.rotation.y += 0.1;
+
+                 if (ball.position.distanceTo(keeperGroup.position.clone().setZ(-12.5)) < 1.1) {
+                     isFlying = false;
+                     alert("Лев Яшин совершает легендарный сейв!");
+                     resetScene();
+                 }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function handleGoalResult() {
+            isFlying = false;
+            if (Math.abs(ball.position.x) < 2.9 && ball.position.y < 3.9) {
+                score++;
+                document.getElementById('scoreText').innerText = `ГОЛ: ${score}`;
+            } else {
+                alert("Мимо ворот!");
+            }
+            resetScene();
+        }
+
+        function resetScene() {
+            setTimeout(() => {
+                ball.position.set(0, 0.38, 5.0);
+                shadowSprite.position.set(0, 0.02, 5.0);
+                shadowSprite.material.opacity = 0.8;
+                
+                keeperState = 'idle';
+                keeperTimer = 0;
+                keeperGroup.position.set(0, 0, -12.5);
+                keeperGroup.rotation.set(0,0,0);
+
+                const kickLeg = messiGroup.getObjectByName("kickLeg");
+                if(kickLeg) kickLeg.rotation.x = -0.6;
+            }, 500);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+</html>
